@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+CONFIG_PATH=${1:-.yorkie}
+
+HOOKS_PATH="$CONFIG_PATH/_"
+WRAPPER=_yorkie
+
+HOOKS='
+  pre-commit
+  prepare-commit-msg
+  commit-msg
+  post-commit
+  applypatch-msg
+  pre-applypatch
+  post-applypatch
+  pre-rebase
+  post-rewrite
+  post-checkout
+  post-merge
+  pre-push
+  pre-auto-gc
+'
+
+if [ ! -d .git ]; then
+  echo '.git not found' >&2
+  exit 1
+fi
+
+git config core.hooksPath "$HOOKS_PATH"
+
+mkdir -p "$HOOKS_PATH"
+echo '*' >"$HOOKS_PATH/.gitignore"
+
+cat <<'EOF' >"$HOOKS_PATH/$WRAPPER"
+#!/usr/bin/env sh
+h="${0##*/}"
+s="${0%/*/*}/$h"
+[ ! -f "$s" ] && exit 0
+[ -f "$HOME/.yorkierc" ] && . "$HOME/.yorkierc"
+sh -e "$s" "$@"
+exit $?
+EOF
+
+for hook in $HOOKS; do
+  cat <<EOF >"$HOOKS_PATH/$hook"
+#!/usr/bin/env sh
+. "\${0%/*}/$WRAPPER"
+EOF
+  chmod 0755 "$HOOKS_PATH/$hook"
+done
